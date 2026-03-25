@@ -1,59 +1,66 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import config
 
-# START COMMAND
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("✅ Join Channel", url=f"https://t.me/{config.CHANNEL_USERNAME.replace('@','')}")],
-        [InlineKeyboardButton("🔓 I Joined (Unlock)", callback_data="check_join")]
-    ]
+bot = telebot.TeleBot(config.BOT_TOKEN)
 
-    await update.message.reply_text(
+# START COMMAND
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = InlineKeyboardMarkup()
+    markup.add(
+        InlineKeyboardButton("✅ Join Channel", url=f"https://t.me/{config.CHANNEL_USERNAME.replace('@','')}")
+    )
+    markup.add(
+        InlineKeyboardButton("🔓 I Joined (Unlock)", callback_data="check_join")
+    )
+
+    bot.send_message(
+        message.chat.id,
         "Welcome 👋\n\nGet access to exclusive drops + winner alerts.\n\nStep 1/2: Join our channel to unlock.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=markup
     )
 
 # CHECK JOIN
-async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
+@bot.callback_query_handler(func=lambda call: call.data == "check_join")
+def check_join(call):
+    user_id = call.from_user.id
 
-    member = await context.bot.get_chat_member(config.CHANNEL_USERNAME, user_id)
+    try:
+        member = bot.get_chat_member(config.CHANNEL_USERNAME, user_id)
 
-    if member.status in ['member', 'administrator', 'creator']:
-        keyboard = [
-            [InlineKeyboardButton("🎰 Play Now", url=config.PLAY_LINK)],
-            [InlineKeyboardButton("🎁 Today’s Offer", url=config.OFFER_LINK)],
-            [InlineKeyboardButton("💬 Support", url=config.SUPPORT_LINK)]
-        ]
+        if member.status in ['member', 'administrator', 'creator']:
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("🎰 Play Now", url=config.PLAY_LINK))
+            markup.add(InlineKeyboardButton("🎁 Today’s Offer", url=config.OFFER_LINK))
+            markup.add(InlineKeyboardButton("💬 Support", url=config.SUPPORT_LINK))
 
-        await query.edit_message_text(
-            "Unlocked 🎉\n\nStep 2/2: Continue below:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            bot.edit_message_text(
+                "Unlocked 🎉\n\nStep 2/2: Continue below:",
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=markup
+            )
+        else:
+            raise Exception("Not joined")
+
+    except:
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("✅ Join Channel", url=f"https://t.me/{config.CHANNEL_USERNAME.replace('@','')}")
         )
-    else:
-        keyboard = [
-            [InlineKeyboardButton("✅ Join Channel", url=f"https://t.me/{config.CHANNEL_USERNAME.replace('@','')}")],
-            [InlineKeyboardButton("🔓 Try Unlock Again", callback_data="check_join")]
-        ]
+        markup.add(
+            InlineKeyboardButton("🔓 Try Unlock Again", callback_data="check_join")
+        )
 
-        await query.answer("You must join first!", show_alert=True)
+        bot.answer_callback_query(call.id, "You must join first!", show_alert=True)
 
-        await query.edit_message_text(
+        bot.edit_message_text(
             "Not subscribed yet—join to unlock access.\n\n• Exclusive signals\n• Daily winners\n• VIP alerts",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=markup
         )
 
-# MAIN
-def main():
-    app = Application.builder().token(config.BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(check_join, pattern="check_join"))
-
-    print("Bot is running...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+print("Bot is running...")
+bot.infinity_polling()
